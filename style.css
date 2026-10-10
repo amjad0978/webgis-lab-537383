@@ -1,0 +1,46 @@
+body {
+font-family: system-ui, sans-serif;
+margin: 0;
+color: #23373b;
+background: #f4f6f6;
+}
+header {
+padding: 18px 24px 10px;
+}
+h1 {
+margin: 0;
+font-size: 24px;
+}
+.subtitle {
+margin: 4px 0 0;
+color: #5b6a6e;
+}
+#panel {
+padding: 10px 24px 14px;
+display: flex;
+align-items: center;
+gap: 12px;
+}
+#count {
+color: #5b6a6e;
+font-size: 14px;
+}
+#map {
+height: calc(100vh - 150px);
+width: 100%;
+}
+.legend {
+background: white;
+padding: 8px 10px;
+line-height: 20px;
+border-radius: 4px;
+box-shadow: 0 1px 4px rgba(0,0,0,.25);
+font-size: 13px;
+}
+.legend i {
+width: 16px;
+height: 16px;
+float: left;
+margin-right: 8px;
+opacity: .85;
+}
