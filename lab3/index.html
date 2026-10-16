@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>District Dashboard</title>
+<link rel="stylesheet"
+href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+<h1>District Dashboard</h1>
+<p class="subtitle">Population density and population of
+Pakistan's districts, 2023 census</p>
+</header>
+<div id="panel">
+<label for="province">Province</label>
+<select id="province">
+<option value="all">All provinces</option>
+</select>
+<span id="count">loading...</span>
+<label class="toggle">
+<input type="checkbox" id="coords">
+Show coordinates on click
+</label>
+</div>
+<div id="map"></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
