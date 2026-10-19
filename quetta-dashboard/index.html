@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#080f16">
+  <meta name="description" content="Interactive Quetta GIS dashboard for population, facilities, parks, earthquakes, and weather.">
+  <title>Quetta GIS Dashboard | Geospatial Solutions</title>
+  <link rel="preconnect" href="https://unpkg.com">
+  <link rel="preconnect" href="https://tile.openstreetmap.org">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css">
+  <link rel="stylesheet" href="css/style.css?v=3">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand-mark" href="#" aria-label="Geospatial Solutions home">
+      <svg class="brand-globe" viewBox="0 0 48 48" role="img" aria-label="Earth globe">
+        <circle cx="24" cy="24" r="19" fill="none" stroke="currentColor" stroke-width="1.8"/>
+        <ellipse cx="24" cy="24" rx="8.5" ry="19" fill="none" stroke="currentColor" stroke-width="1.4"/>
+        <path d="M6 24h36M10 15h28M10 33h28M24 5c-5 5-7 11-7 19s2 14 7 19M24 5c5 5 7 11 7 19s-2 14-7 19" fill="none" stroke="currentColor" stroke-width="1.2"/>
+        <path d="m15 17 3-3 3 1 2-3 4 2 1 4-3 2-1 4-4-1-2-3-3-1zm11 8 4-2 4 2 2 4-3 3-1 5-4-2-1-4-3-2z" fill="#52d6b7" stroke="#52d6b7" stroke-linejoin="round"/>
+      </svg>
+    </a>
+    <div class="brand-copy">
+      <p class="eyebrow">THE CAPITAL OF BALOCHISTAN</p>
+      <h1>GEOSPATIAL SOLUTIONS</h1>
+    </div>
+  </header>
+
+  <main class="dashboard">
+    <section class="toolbar panel" aria-label="Map tools">
+      <div class="search-wrap">
+        <label class="sr-only" for="search">Search hospitals, schools, and parks</label>
+        <span class="search-icon" aria-hidden="true">⌕</span>
+        <input id="search" type="search" placeholder="Search hospitals, schools, parks…" autocomplete="off">
+        <div id="search-results" class="search-results" role="listbox" hidden></div>
+      </div>
+      <div class="tool-buttons">
+        <button id="zoom-quetta" class="tool-button primary" type="button"><span aria-hidden="true">⌖</span> Zoom to Quetta</button>
+        <button id="locate" class="tool-button" type="button"><span aria-hidden="true">◎</span> Locate me</button>
+        <button id="fullscreen" class="tool-button" type="button"><span aria-hidden="true">⛶</span> Fullscreen</button>
+        <button id="measure" class="tool-button" type="button"><span aria-hidden="true">↗</span> Measure distance</button>
+        <button id="export-map" class="tool-button" type="button"><span aria-hidden="true">▧</span> Export PNG</button>
+        <button id="reset-view" class="tool-button" type="button"><span aria-hidden="true">↺</span> Reset view</button>
+      </div>
+    </section>
+
+    <div id="message-area" class="message-area" aria-live="polite"></div>
+    <div id="loading" class="loading-overlay" role="status">
+      <span class="spinner" aria-hidden="true"></span>
+      <span>Loading Quetta map layers…</span>
+    </div>
+
+    <section class="stat-grid" aria-label="Dashboard statistics">
+      <article class="stat-card"><span class="stat-icon red">✚</span><div><p>Hospitals &amp; clinics</p><strong id="stat-hospitals">—</strong></div></article>
+      <article class="stat-card"><span class="stat-icon blue">▦</span><div><p>Schools &amp; colleges</p><strong id="stat-schools">—</strong></div></article>
+      <article class="stat-card"><span class="stat-icon green">♧</span><div><p>Parks &amp; gardens</p><strong id="stat-parks">—</strong></div></article>
+      <article class="stat-card"><span class="stat-icon green">◫</span><div><p>Total park area</p><strong id="stat-park-area">—</strong><small>hectares</small></div></article>
+      <article class="stat-card"><span class="stat-icon teal">♙</span><div><p>Population</p><strong id="stat-population">—</strong><small id="population-source">district estimate</small></div></article>
+    </section>
+
+    <div class="content-grid">
+      <section class="map-panel panel" aria-label="Interactive map">
+        <div class="section-heading map-heading">
+          <div><p class="eyebrow">EXPLORE THE DISTRICT</p><h2>The Capital of Balochistan</h2></div>
+          <span id="quake-status" class="data-status">Earthquakes: loading</span>
+        </div>
+        <div class="map-layout">
+          <aside class="map-sidebar" aria-label="Map layers and directions">
+            <section class="side-section">
+              <h3>Map layers</h3>
+              <label class="layer-option"><input id="layer-boundary" type="checkbox" checked><span class="legend-line boundary"></span> Quetta boundary</label>
+              <label class="layer-option"><input id="layer-population" type="checkbox" checked><span class="legend-box population"></span> Population choropleth</label>
+              <label class="layer-option"><input id="layer-hospitals" type="checkbox" checked><span class="legend-dot hospital"></span> Hospitals</label>
+              <label class="layer-option"><input id="layer-schools" type="checkbox" checked><span class="legend-dot school"></span> Schools</label>
+              <label class="layer-option"><input id="layer-parks" type="checkbox" checked><span class="legend-dot park"></span> Parks</label>
+              <label class="layer-option"><input id="layer-earthquakes" type="checkbox" checked><span class="legend-dot quake"></span> Earthquakes (500 km)</label>
+            </section>
+            <section class="side-section direction-tools">
+              <h3>Directions</h3>
+              <button id="from-location" class="side-button" type="button">From my location</button>
+              <button id="set-start" class="side-button" type="button">Click map to set start</button>
+              <button id="clear-route" class="side-button quiet" type="button">Clear route</button>
+              <p id="route-summary" class="muted-text">Choose a start, then use Get Directions in a popup.</p>
+            </section>
+            <section class="side-section">
+              <h3>Analysis</h3>
+              <button id="nearest-hospital" class="side-button accent" type="button">Find nearest hospital</button>
+              <button id="measure-clear" class="side-button quiet" type="button">Clear measurement</button>
+              <p id="measure-summary" class="muted-text">Distance: —</p>
+            </section>
+          </aside>
+          <div id="map" aria-label="Map of Quetta"></div>
+        </div>
+        <div class="map-footer"><span id="map-coordinates">Map coordinates appear here on click</span><span>Basemaps: OSM · Esri Satellite · Esri Labels · CartoDB Dark</span></div>
+      </section>
+
+      <aside class="right-column">
+        <section class="panel weather-panel">
+          <div class="section-heading compact"><div><p class="eyebrow">CURRENT CONDITIONS</p><h2>Quetta weather</h2></div><span id="weather-status" class="data-status">Loading</span></div>
+          <div class="weather-grid">
+            <div><span class="weather-symbol">☼</span><strong id="weather-temp">—</strong><small>Temperature °C</small></div>
+            <div><span class="weather-symbol wind">↝</span><strong id="weather-wind">—</strong><small>Wind km/h</small></div>
+            <div><span class="weather-symbol air">◉</span><strong id="weather-aqi">—</strong><small>Air quality AQI</small></div>
+          </div>
+          <p id="weather-note" class="muted-text">Live data via Open-Meteo. Cached conditions are used offline.</p>
+        </section>
+
+        <section class="panel chart-panel">
+          <div class="section-heading compact"><div><p class="eyebrow">LOCAL AMENITIES</p><h2>Facilities overview</h2></div></div>
+          <div class="chart-container"><canvas id="facilities-chart" aria-label="Facilities count chart"></canvas></div>
+        </section>
+
+        <section class="panel chart-panel">
+          <div class="section-heading compact"><div><p class="eyebrow">GREEN SPACE</p><h2>Largest parks</h2></div></div>
+          <div class="chart-container parks-chart"><canvas id="parks-chart" aria-label="Top five parks by area"></canvas></div>
+        </section>
+
+        <section class="panel parks-panel">
+          <div class="section-heading compact"><div><p class="eyebrow">PARK REGISTER</p><h2>Parks by area</h2></div><span id="park-count-label" class="data-status">0 parks</span></div>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Park</th><th>m²</th><th>ha</th><th>ac</th></tr></thead>
+              <tbody id="parks-table"><tr><td colspan="4" class="empty-cell">No park features in the supplied data.</td></tr></tbody>
+            </table>
+          </div>
+          <p class="muted-text">Select a park row to zoom to its location.</p>
+        </section>
+
+        <section class="panel earthquakes-panel">
+          <div class="section-heading compact"><div><p class="eyebrow">SEISMIC ACTIVITY</p><h2>Recent earthquakes</h2></div><span id="quake-count" class="data-status">0 nearby</span></div>
+          <p id="quake-message" class="muted-text">Loading earthquakes within 500 km of Quetta…</p>
+          <ul id="quake-list" class="quake-list"></ul>
+        </section>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-note">QUETTA · BALOCHISTAN · PAKISTAN</div>
+  </footer>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+  <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <script src="https://unpkg.com/leaflet-image@0.4.0/leaflet-image.js"></script>
+  <script src="js/app.js?v=3"></script>
+</body>
+</html>
