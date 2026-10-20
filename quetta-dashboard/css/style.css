@@ -69,6 +69,7 @@ button { cursor: pointer; }
 .stat-icon.blue { color: var(--blue); background: #edf5ff; }
 .stat-icon.green { color: var(--green); background: #eaf7f1; }
 .stat-icon.teal { color: var(--teal); background: #e9f8f5; }
+.stat-icon.orange { color: #ef8d37; background: #fff0df; }
 .stat-card p { margin: 0 0 3px; color: var(--muted); font-size: 10px; }
 .stat-card strong { display: inline-block; color: var(--navy); font-size: 20px; line-height: 1.1; }
 .stat-card small { display: inline-block; margin-left: 4px; color: #81909c; font-size: 9px; }
@@ -93,8 +94,9 @@ button { cursor: pointer; }
 .legend-box { width: 12px; height: 12px; border-radius: 3px; background: #68b7a3; }
 .legend-dot { width: 10px; height: 10px; margin: 0 2px; border: 1px solid #fff; border-radius: 50%; box-shadow: 0 0 0 1px #8899a3; }
 .legend-dot.hospital { background: var(--red); }
-.legend-dot.school { background: var(--blue); }
-.legend-dot.park { background: var(--green); }
+.legend-dot.fire-station { background: #ef8d37; }
+.legend-dot.police-station { background: #4b9be8; }
+.legend-dot.shelter { background: #39b783; }
 .legend-dot.quake { background: #e08a36; }
 .side-button { width: 100%; min-height: 31px; padding: 6px 7px; margin: 0 0 6px; border: 1px solid #dbe5ec; border-radius: 5px; color: #3c566b; background: #fff; font-size: 10px; text-align: center; }
 .side-button:hover, .side-button.accent { border-color: #5bb5aa; color: #08776d; background: #edf9f7; }
@@ -123,16 +125,12 @@ button { cursor: pointer; }
 .weather-grid strong { margin: 3px 0 1px; color: var(--navy); font-size: 16px; }
 .weather-grid small { color: #84909a; font-size: 8px; }
 .chart-container { position: relative; height: 140px; margin-top: 8px; }
-.chart-container.parks-chart { height: 150px; }
 .table-scroll { max-height: 205px; margin-top: 10px; overflow: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 9px; }
 th { position: sticky; top: 0; padding: 7px 5px; color: #728292; background: #f5f8fa; text-align: right; font-weight: 700; }
 th:first-child, td:first-child { text-align: left; }
 td { padding: 7px 5px; border-bottom: 1px solid #edf1f4; color: #4a5e6d; text-align: right; }
-tbody tr[data-park-index] { cursor: pointer; }
-tbody tr[data-park-index]:hover { background: #eff9f6; }
 .empty-cell { color: #909ca7; text-align: center !important; }
-.parks-panel > .muted-text { margin-top: 7px; }
 .quake-list { max-height: 140px; padding: 0; margin: 7px 0 0; overflow: auto; list-style: none; }
 .quake-list li { border-bottom: 1px solid #edf1f4; }
 .quake-item { width: 100%; display: flex; justify-content: space-between; gap: 8px; padding: 6px 1px; border: 0; color: #506373; background: transparent; text-align: left; font-size: 9px; cursor: pointer; }
@@ -208,6 +206,7 @@ body { background: var(--canvas); color: var(--ink); }
 .stat-icon.blue { background: #1c2b40; }
 .stat-icon.green { background: #19332c; }
 .stat-icon.teal { background: #153532; }
+.stat-icon.orange { background: #382c1e; }
 .stat-card strong { color: #f0f5f8; }
 .stat-card small { color: #91a3ae; }
 .section-heading h2, .side-section h3 { color: #e6eef2; }
@@ -241,7 +240,6 @@ body { background: var(--canvas); color: var(--ink); }
 .weather-grid small { color: #a1b1bc; }
 th { color: #aebdc7; background: #182630; }
 td { border-bottom-color: #263744; color: #c0cdd5; }
-tbody tr[data-park-index]:hover { background: #172d31; }
 .empty-cell { color: #9baab3; }
 .quake-list li { border-bottom-color: #263744; }
 .quake-item { color: #bfccd4; }

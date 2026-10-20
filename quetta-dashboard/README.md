@@ -1,26 +1,32 @@
-# Quetta GIS Dashboard
+# Quetta Disaster Response Map
 
-A static Leaflet dashboard designed for GitHub Pages. It displays the Quetta district boundary, a population choropleth, local facilities, parks, nearby earthquakes, and live Open-Meteo weather/air-quality conditions.
+A static Leaflet dashboard for disaster situational awareness in Quetta, Balochistan. It maps hospitals and clinics, fire and police stations, emergency shelters or assembly points, and recent USGS earthquakes within 500 km. It also shows current weather and air-quality conditions as context.
 
-The interface uses a charcoal-and-teal dark theme. The map basemap remains selectable, including a dark CartoDB option.
+**This map is not an emergency dispatch system or an official warning service.** OpenStreetMap facility coverage may be incomplete or outdated. Verify locations, earthquake reports, weather alerts, and response instructions with official authorities before acting.
+
+## Data and sources
+
+- Quetta district boundary from the supplied district vector data.
+- Emergency facilities from OpenStreetMap via the Geofabrik Pakistan extract: hospitals/clinics, fire stations, police stations, and shelters/assembly points. The facilities are clipped to the district boundary; names, categories, OSM IDs, and source attribution are included where available.
+- Recent earthquakes from the USGS past-month GeoJSON feed, filtered to 500 km of Quetta. The dashboard falls back to browser cache and then `data/earthquakes_backup.geojson`.
+- Current weather and air-quality context from Open-Meteo.
+
+Facility counts reflect mapped OSM features, not a verified or complete register. Earthquake data is informational and should not be interpreted as a prediction or an official alert.
+
+The included October 18, 2026 OSM snapshot contains 26 hospital/clinic features, 1 fire-station feature, 21 police features, and 3 shelter/assembly-point features. Counts represent mapped OSM objects, not necessarily unique or currently operating facilities.
 
 ## Prepare data
 
-The data preparation script scans `C:\webgis-data` and `C:\webgis-lab` for district/population and OSM-like vector files. It can also download the latest Pakistan OpenStreetMap extract from Geofabrik and clip healthcare, school, and park features to Quetta. From this machine's supplied files it selects:
-
-- District name field: `adm2_name` in `districts_A.geojson`.
-- Population field: `pop_2023` in `C:\webgis-lab\data\districts.geojson` (Quetta: 2,595,492).
-- No OSM `fclass` facility layer or finer-scale population layer was supplied locally. The latest Geofabrik Pakistan OSM extract was downloaded and processed; it provides healthcare facilities, schools, and parks. The population polygon uses the district-level 2023 census total; no newer local population source or union-council/tehsil layer was found.
-- The dashboard's facility layers contain 26 hospitals and clinics, 28 schools, colleges, and universities, and 24 parks and gardens from the October 18, 2026 OpenStreetMap snapshot, clipped to the Quetta district boundary. Counts reflect mapped OSM features and may change as the map data is updated.
-
-GIS packages (`geopandas`, `shapely`, and `pyproj`) are already installed in the QGIS Python runtime. On Windows, run the script using the QGIS environment launcher:
+The preparation script scans `C:\webgis-data` and `C:\webgis-lab` for the Quetta district boundary and OSM-like vector sources. It can download and process the current Pakistan OpenStreetMap extract for emergency facilities. GIS packages (`geopandas`, `shapely`, and `pyproj`) are available in the QGIS Python runtime. On Windows:
 
 ```powershell
 Set-Location C:\webgis-lab\quetta-dashboard
 & $env:ComSpec /c 'call "C:\Program Files\QGIS 3.40.6\bin\python-qgis-ltr.bat" prepare_data.py --download-osm'
 ```
 
-The `--download-osm` option downloads the current 150+ MB Pakistan snapshot to a temporary folder, extracts features near Quetta, and removes the PBF afterward. To reuse a PBF already downloaded, pass `--osm-pbf C:\path\to\pakistan-latest.osm.pbf`. To use different district/population input folders, append `--data-root <path> --lab-root <path>`. The script downloads the USGS monthly earthquake GeoJSON; internet access is required for live-source refreshes.
+The download option fetches the current 150+ MB Pakistan OSM snapshot, extracts the four response-facility categories for Quetta, and removes the temporary PBF afterward. To reuse an existing extract, pass `--osm-pbf C:\path\to\pakistan-latest.osm.pbf`. To use different input folders, append `--data-root <path> --lab-root <path>`. The script downloads a USGS earthquake backup; internet access is required unless `--reuse-earthquake-backup` is used.
+
+Outputs are written to `data/`: the district boundary, the four emergency-facility GeoJSON files, and the USGS earthquake backup. Generated GeoJSON files are checked to remain below 5 MB.
 
 ## Run locally
 
@@ -29,12 +35,8 @@ Set-Location C:\webgis-lab\quetta-dashboard
 python -m http.server 8000
 ```
 
-Open <http://localhost:8000>. The initial view is the Quetta district; panning stays near Quetta and can extend to nearby earthquake markers. The map cannot pan around all of Pakistan. A local HTTP server is required because browsers block `fetch()` from `file://` URLs. The map basemaps, live feeds, routing, and CDN libraries require an internet connection; cached earthquakes/weather and the local earthquake backup provide offline data where available. Click facility and earthquake markers (or an earthquake list entry) to open details.
+Open <http://localhost:8000>. A local HTTP server is required because browsers block `fetch()` from `file://` URLs. Basemaps, live feeds, routing, and CDN libraries require internet access; cached earthquakes are available offline where possible. Click hospital or emergency-facility markers to view details and route there; click an earthquake marker or list entry to inspect the USGS event.
 
-## Update population / facility data
+## Publish
 
-Replace the source files with data that intersects Quetta, then run `prepare_data.py` again. Population values are exported to `data/population.geojson` as an editable `population` property. Parks include `area_m2`, `area_ha`, and `area_acres`, computed in EPSG:32642. The USGS backup is limited to events within 500 km of Quetta. Generated GeoJSON files are simplified and checked to remain below 5 MB.
-
-## GitHub Pages
-
-This dashboard is published from the `quetta-dashboard` folder in the `webgis-lab-537383` repository. GitHub Pages serves the repository's `main` branch from its root, so the dashboard is available at <https://amjad0978.github.io/webgis-lab-537383/quetta-dashboard/> after the latest commit has deployed.
+The dashboard is published from the `quetta-dashboard` folder in the `webgis-lab-537383` repository. GitHub Pages serves the repository's `main` branch from its root: <https://amjad0978.github.io/webgis-lab-537383/quetta-dashboard/>.

@@ -3,20 +3,27 @@
 
   const QUETTA = [30.141413, 67.077434];
   const MAX_QUAKE_DISTANCE_KM = 500;
-  const DATA_VERSION = "20261020";
+  const DATA_VERSION = "20261020-response1";
   const DATA_FILES = {
     boundary: "data/quetta_district.geojson",
-    population: "data/population.geojson",
     hospitals: "data/hospitals.geojson",
-    schools: "data/schools.geojson",
-    parks: "data/parks.geojson",
+    fire_stations: "data/fire_stations.geojson",
+    police_stations: "data/police_stations.geojson",
+    emergency_shelters: "data/emergency_shelters.geojson",
     earthquakes: "data/earthquakes_backup.geojson"
   };
   const COLORS = {
     hospitals: "#e45252",
-    schools: "#3d82d5",
-    parks: "#2d9a6e",
+    fire_stations: "#ef8d37",
+    police_stations: "#4b9be8",
+    emergency_shelters: "#39b783",
     earthquakes: "#e08a36"
+  };
+  const FACILITY_LABELS = {
+    hospitals: "Hospital / clinic",
+    fire_stations: "Fire station",
+    police_stations: "Police station",
+    emergency_shelters: "Shelter / assembly point"
   };
 
   const map = L.map("map", {
@@ -53,19 +60,19 @@
 
   const layerGroups = {
     boundary: L.featureGroup().addTo(map),
-    population: L.featureGroup().addTo(map),
     hospitals: L.featureGroup().addTo(map),
-    schools: L.featureGroup().addTo(map),
-    parks: L.featureGroup().addTo(map),
+    fire_stations: L.featureGroup().addTo(map),
+    police_stations: L.featureGroup().addTo(map),
+    emergency_shelters: L.featureGroup().addTo(map),
     earthquakes: L.featureGroup().addTo(map)
   };
   const state = {
     quettaFeature: null,
     quettaBounds: null,
-    population: null,
     hospitals: [],
-    schools: [],
-    parks: [],
+    fire_stations: [],
+    police_stations: [],
+    emergency_shelters: [],
     earthquakes: [],
     searchItems: [],
     start: null,
@@ -76,8 +83,7 @@
     measurePoints: [],
     measureLine: null,
     userMarker: null,
-    facilitiesChart: null,
-    parksChart: null
+    facilitiesChart: null
   };
 
   const messageArea = document.getElementById("message-area");
@@ -127,16 +133,16 @@
     if (!location) return;
     const title = htmlEscape(featureName(feature, kind.slice(0, -1)));
     let details = "";
-    if (kind === "parks") {
-      const area = Number(props.area_m2 || 0);
-      details = `<br>Area: ${numberFormat(area, 2)} m²<br>${numberFormat(props.area_ha, 4)} ha · ${numberFormat(props.area_acres, 4)} acres`;
-    } else if (kind === "earthquakes") {
+    if (kind === "earthquakes") {
+      const depth = Number(feature.geometry?.coordinates?.[2]);
+      const occurred = Number(props.time);
       details = `<br>Magnitude: ${numberFormat(props.mag, 1)}<br>${htmlEscape(props.place || "Location unavailable")}`;
-    } else if (kind === "hospitals" || kind === "schools") {
+      if (Number.isFinite(depth)) details += `<br>Depth: ${numberFormat(depth, 1)} km`;
+      if (Number.isFinite(occurred) && occurred > 0) details += `<br>${new Date(occurred).toLocaleString()}`;
+      if (props.url) details += `<br><a href="${htmlEscape(props.url)}" target="_blank" rel="noopener noreferrer">USGS event details</a>`;
+    } else if (FACILITY_LABELS[kind]) {
       const category = propertyValue(props, ["fclass", "class"]);
-      if (category) details = `<br>${htmlEscape(category)}`;
-    } else if (kind === "population") {
-      details = `<br>Population: ${numberFormat(props.population)}`;
+      details = `<br>${htmlEscape(category || FACILITY_LABELS[kind])}`;
     }
     layer.bindPopup(`<div class="popup-title">${title}</div>${details}${routeButton(location)}`);
     layer.on("click", () => {
@@ -146,19 +152,10 @@
     });
   }
 
-  function populationColor(population) {
-    const value = Number(population);
-    if (!Number.isFinite(value) || value <= 0) return "#dbe7e5";
-    if (value > 1_000_000) return "#187e75";
-    if (value > 500_000) return "#42a995";
-    if (value > 100_000) return "#83c8ad";
-    return "#c4e5d5";
-  }
-
   function makeFacilityLayer(features, kind) {
     const group = L.geoJSON(features, {
       pointToLayer: (feature, latlng) => L.circleMarker(latlng, {
-        radius: kind === "parks" ? 6 : 6,
+        radius: 6,
         color: "#ffffff",
         weight: 1.3,
         fillColor: COLORS[kind],
@@ -170,7 +167,7 @@
     group.eachLayer((layer) => {
       const feature = layer.feature;
       if (!feature) return;
-      const item = { feature, layer, kind, name: featureName(feature, kind.slice(0, -1)) };
+      const item = { feature, layer, kind, name: featureName(feature, FACILITY_LABELS[kind] || kind) };
       if (kind !== "earthquakes") state.searchItems.push(item);
     });
     return group;
@@ -185,22 +182,8 @@
     state.quettaBounds = districtBounds;
     map.setMaxBounds(districtBounds.pad(0.08));
     map.setMinZoom(map.getBoundsZoom(districtBounds));
-    const population = L.geoJSON(state.population, {
-      style: (item) => ({
-        color: "#267b71", weight: 1.5,
-        fillColor: populationColor(item.properties?.population),
-        fillOpacity: 0.5
-      }),
-      onEachFeature: (item, layer) => bindFeaturePopup(item, layer, "population")
-    });
     layerGroups.boundary.addLayer(boundary);
-    layerGroups.population.addLayer(population);
     state.searchItems = [];
-    if (state.population?.features) {
-      state.population.features.forEach((item) => state.searchItems.push({
-        feature: item, kind: "population", name: "Quetta population"
-      }));
-    }
   }
 
   function styleLayerCheckboxes() {
@@ -215,16 +198,9 @@
 
   function updateStats() {
     document.getElementById("stat-hospitals").textContent = numberFormat(state.hospitals.length);
-    document.getElementById("stat-schools").textContent = numberFormat(state.schools.length);
-    document.getElementById("stat-parks").textContent = numberFormat(state.parks.length);
-    const parkArea = state.parks.reduce((sum, feature) => sum + Number(feature.properties.area_ha || 0), 0);
-    document.getElementById("stat-park-area").textContent = numberFormat(parkArea, 2);
-    const population = (state.population?.features || []).reduce(
-      (sum, feature) => sum + Number(feature.properties?.population || 0), 0
-    );
-    document.getElementById("stat-population").textContent = population ? numberFormat(population) : "Edit data";
-    document.getElementById("population-source").textContent = population
-      ? "Quetta district census" : "editable in population.geojson";
+    document.getElementById("stat-fire-stations").textContent = numberFormat(state.fire_stations.length);
+    document.getElementById("stat-police-stations").textContent = numberFormat(state.police_stations.length);
+    document.getElementById("stat-emergency-shelters").textContent = numberFormat(state.emergency_shelters.length);
   }
 
   function buildCharts() {
@@ -233,14 +209,23 @@
       return;
     }
     if (state.facilitiesChart) state.facilitiesChart.destroy();
-    if (state.parksChart) state.parksChart.destroy();
     state.facilitiesChart = new Chart(document.getElementById("facilities-chart"), {
       type: "bar",
       data: {
-        labels: ["Hospitals", "Schools", "Parks"],
+        labels: ["Hospitals", "Fire stations", "Police stations", "Shelters"],
         datasets: [{
-          data: [state.hospitals.length, state.schools.length, state.parks.length],
-          backgroundColor: [COLORS.hospitals, COLORS.schools, COLORS.parks],
+          data: [
+            state.hospitals.length,
+            state.fire_stations.length,
+            state.police_stations.length,
+            state.emergency_shelters.length
+          ],
+          backgroundColor: [
+            COLORS.hospitals,
+            COLORS.fire_stations,
+            COLORS.police_stations,
+            COLORS.emergency_shelters
+          ],
           borderRadius: 5,
           maxBarThickness: 30
         }]
@@ -258,63 +243,6 @@
       }
     });
 
-    const topParks = [...state.parks].sort((a, b) =>
-      Number(b.properties.area_m2 || 0) - Number(a.properties.area_m2 || 0)
-    ).slice(0, 5);
-    state.parksChart = new Chart(document.getElementById("parks-chart"), {
-      type: "bar",
-      data: {
-        labels: topParks.map((feature) => featureName(feature, "Unnamed park")),
-        datasets: [{
-          data: topParks.map((feature) => Number(feature.properties.area_ha || 0)),
-          backgroundColor: "#48a985",
-          borderRadius: 4,
-          maxBarThickness: 22
-        }]
-      },
-      options: {
-        indexAxis: "y",
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            backgroundColor: "#172832",
-            titleColor: "#edf4f7",
-            bodyColor: "#d6e2e8",
-            callbacks: { label: (item) => `${numberFormat(item.raw, 2)} ha` }
-          }
-        },
-        scales: {
-          x: { beginAtZero: true, grid: { color: "#293a46" }, ticks: { color: "#a4b5bf", font: { size: 8 } } },
-          y: { grid: { display: false }, ticks: { color: "#b6c4cc", font: { size: 8 } } }
-        }
-      }
-    });
-  }
-
-  function buildParksTable() {
-    const body = document.getElementById("parks-table");
-    const sorted = [...state.parks].sort((a, b) =>
-      Number(b.properties.area_m2 || 0) - Number(a.properties.area_m2 || 0)
-    );
-    document.getElementById("park-count-label").textContent = `${sorted.length} parks`;
-    if (!sorted.length) {
-      body.innerHTML = '<tr><td colspan="4" class="empty-cell">No park features in the supplied data.</td></tr>';
-      return;
-    }
-    body.innerHTML = sorted.map((feature, index) => {
-      feature._dashboardIndex = index;
-      return `<tr data-park-index="${index}"><td>${htmlEscape(featureName(feature, "Unnamed park"))}</td><td>${numberFormat(feature.properties.area_m2, 1)}</td><td>${numberFormat(feature.properties.area_ha, 3)}</td><td>${numberFormat(feature.properties.area_acres, 3)}</td></tr>`;
-    }).join("");
-    body.querySelectorAll("[data-park-index]").forEach((row) => {
-      row.addEventListener("click", () => {
-        const feature = sorted[Number(row.dataset.parkIndex)];
-        const bounds = L.geoJSON(feature).getBounds();
-        map.fitBounds(bounds, { maxZoom: 16, padding: [30, 30] });
-        const match = layerGroups.parks.getLayers().find((layer) => layer.feature === feature);
-        if (match?.openPopup) match.openPopup();
-      });
-    });
   }
 
   async function loadLocalData() {
@@ -329,25 +257,24 @@
     const data = Object.fromEntries(outcomes);
     if (data.boundary?.features?.length) {
       state.quettaFeature = data.boundary;
-      state.population = data.population || { type: "FeatureCollection", features: [] };
       makeBoundary(data.boundary);
       map.fitBounds(state.quettaBounds, { padding: [18, 18] });
     } else {
       showMessage("Quetta boundary is unavailable. Fix: place a valid Quetta polygon at data/quetta_district.geojson and reload.", "error");
     }
 
-    for (const kind of ["hospitals", "schools", "parks"]) {
+    for (const kind of ["hospitals", "fire_stations", "police_stations", "emergency_shelters"]) {
       const features = data[kind]?.features || [];
       state[kind] = features;
       layerGroups[kind].addLayer(makeFacilityLayer(data[kind] || { type: "FeatureCollection", features: [] }, kind));
     }
     updateStats();
     buildCharts();
-    buildParksTable();
 
-    const totalFacilities = state.hospitals.length + state.schools.length + state.parks.length;
+    const totalFacilities = state.hospitals.length + state.fire_stations.length
+      + state.police_stations.length + state.emergency_shelters.length;
     if (totalFacilities === 0) {
-      showMessage("No OSM facility extract was found during data preparation. Hospitals, schools, and parks remain empty. Add an OSM GeoJSON/shapefile with an fclass field under C:\\webgis-data, then run prepare_data.py again.", "warning");
+      showMessage("No emergency facilities were found during data preparation. Add a current OSM extract and rerun prepare_data.py to refresh hospital, fire, police, and shelter locations.", "warning");
     }
     await loadEarthquakes(data.earthquakes);
     document.getElementById("loading").classList.add("hidden");
@@ -393,6 +320,7 @@
     });
     map.setMaxBounds(earthquakeBounds.pad(0.05));
     state.earthquakes = nearby;
+    document.getElementById("stat-earthquakes").textContent = numberFormat(nearby.length);
     const collection = { type: "FeatureCollection", features: nearby };
     const layer = L.geoJSON(collection, {
       pointToLayer: (feature, latlng) => L.circleMarker(latlng, {
@@ -619,10 +547,10 @@
       const query = input.value.trim().toLocaleLowerCase();
       if (!query) { results.hidden = true; results.innerHTML = ""; return; }
       const matches = state.searchItems.filter((item) =>
-        item.kind !== "population" && item.name.toLocaleLowerCase().includes(query)
+        item.name.toLocaleLowerCase().includes(query)
       ).slice(0, 8);
       results.innerHTML = matches.length
-        ? matches.map((item, index) => `<button type="button" class="search-result" data-result="${index}">${htmlEscape(item.name)}<small>${htmlEscape(item.kind.slice(0, -1))}</small></button>`).join("")
+        ? matches.map((item, index) => `<button type="button" class="search-result" data-result="${index}">${htmlEscape(item.name)}<small>${htmlEscape(FACILITY_LABELS[item.kind] || item.kind)}</small></button>`).join("")
         : '<div class="search-result">No matching facility found</div>';
       results.hidden = false;
       results.querySelectorAll("[data-result]").forEach((button, index) => {

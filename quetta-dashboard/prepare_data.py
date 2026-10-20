@@ -1,4 +1,4 @@
-"""Prepare compact GeoJSON inputs for the Quetta GIS dashboard."""
+"""Prepare compact disaster-response GeoJSON inputs for the Quetta dashboard."""
 
 from __future__ import annotations
 
@@ -26,8 +26,9 @@ AREA_CRS = "EPSG:32642"
 QUETTA_CENTER = (30.141413, 67.077434)
 FACILITY_CLASSES = {
     "hospitals": {"hospital", "clinic"},
-    "schools": {"school", "college", "university"},
-    "parks": {"park", "recreation_ground", "garden"},
+    "fire_stations": {"fire_station"},
+    "police_stations": {"police"},
+    "emergency_shelters": {"shelter", "emergency_shelter", "assembly_point"},
 }
 
 
@@ -129,7 +130,7 @@ def empty_feature_collection(target: Path):
         encoding="utf-8",
     )
     logging.warning(
-        "%s is empty: no supplied vector data with a matching OSM fclass was found.",
+        "%s is empty: no matching emergency facilities were found in the supplied data.",
         target.name,
     )
 
@@ -182,8 +183,7 @@ def read_osm_pbf(path: Path, boundary: gpd.GeoDataFrame):
         }
         amenity = (osm_tag(raw_properties, "amenity") or "").casefold()
         healthcare = (osm_tag(raw_properties, "healthcare") or "").casefold()
-        leisure = (osm_tag(raw_properties, "leisure") or "").casefold()
-        landuse = (osm_tag(raw_properties, "landuse") or "").casefold()
+        emergency = (osm_tag(raw_properties, "emergency") or "").casefold()
         if amenity in {"hospital", "clinic", "doctors"} or healthcare in {
             "hospital", "clinic", "doctor", "doctors"
         }:
@@ -191,11 +191,12 @@ def read_osm_pbf(path: Path, boundary: gpd.GeoDataFrame):
             fclass = "clinic" if amenity in {"clinic", "doctors"} or healthcare in {
                 "clinic", "doctor", "doctors"
             } else "hospital"
-        elif amenity in {"school", "college", "university"}:
-            kind, fclass = "schools", amenity
-        elif leisure in {"park", "garden"} or landuse == "recreation_ground":
-            kind = "parks"
-            fclass = landuse if landuse == "recreation_ground" else leisure
+        elif amenity == "fire_station":
+            kind, fclass = "fire_stations", "fire_station"
+        elif amenity == "police":
+            kind, fclass = "police_stations", "police"
+        elif amenity == "shelter" or emergency in {"shelter", "assembly_point"}:
+            kind, fclass = "emergency_shelters", emergency or "shelter"
         else:
             continue
 
@@ -229,8 +230,7 @@ def read_osm_pbf(path: Path, boundary: gpd.GeoDataFrame):
         frame = gpd.clip(frame, boundary_geometry)
         if frame.empty:
             continue
-        if kind != "parks":
-            frame.geometry = frame.geometry.representative_point()
+        frame.geometry = frame.geometry.representative_point()
         clipped_frames[kind].append(frame)
     logging.info(
         "Extracted OSM PBF features in Quetta: %s.",
@@ -252,50 +252,6 @@ def download_osm_pbf(path: Path):
                 output.write(chunk)
     logging.info("Downloaded current Geofabrik Pakistan OSM extract (%s): %s",
                  last_modified, path)
-
-
-def prepare_population(paths, boundary, target):
-    population_candidates = ("population", "pop_2023", "pop2023", "pop")
-    for path in paths:
-        try:
-            frame = read_vector(path)
-        except Exception as error:
-            logging.warning("Skipping unreadable population candidate %s: %s", path, error)
-            continue
-        population_field = find_field(frame.columns, population_candidates, ("population",))
-        if population_field is None:
-            population_field = find_field(frame.columns, ("pop_2023", "pop"))
-        if population_field is None:
-            continue
-
-        district_field = find_field(
-            frame.columns, ("district", "adm2_name", "district_name"), ("district", "adm2name")
-        )
-        if district_field is not None:
-            frame = frame[
-                frame[district_field].astype("string").str.casefold().str.contains(
-                    "quetta", na=False
-                )
-            ].copy()
-        if frame.empty:
-            continue
-
-        frame = clean_geometries(frame)
-        frame = gpd.clip(frame, boundary.geometry.union_all())
-        if frame.empty:
-            continue
-        frame["population"] = pd.to_numeric(frame[population_field], errors="coerce")
-        logging.info("Population source: %s; selected field: %s", path, population_field)
-        return write_compact(frame, target, 10)
-
-    logging.warning(
-        "No population, tehsil, or union-council layer was found. "
-        "Using the Quetta district polygon with editable population=0."
-    )
-    fallback = boundary.copy()
-    fallback["population"] = 0
-    fallback["population_source"] = "edit this value: no local population input was found"
-    write_compact(fallback, target, 10)
 
 
 def prepare_facilities(paths, boundary, output_dir, osm_pbf=None):
@@ -322,13 +278,7 @@ def prepare_facilities(paths, boundary, output_dir, osm_pbf=None):
             selected = gpd.clip(selected, boundary.geometry.union_all())
             if selected.empty:
                 continue
-            if output_name == "parks":
-                projected = selected.to_crs(AREA_CRS)
-                selected["area_m2"] = projected.geometry.area.round(2).to_numpy()
-                selected["area_ha"] = (selected["area_m2"] / 10_000).round(4)
-                selected["area_acres"] = (selected["area_m2"] / 4_046.8564224).round(4)
-            else:
-                selected.geometry = selected.geometry.representative_point()
+            selected.geometry = selected.geometry.representative_point()
             output_frames[output_name].append(selected)
         logging.info("OSM-like feature source: %s; class field: %s", path, class_field)
 
@@ -341,16 +291,11 @@ def prepare_facilities(paths, boundary, output_dir, osm_pbf=None):
         osm_frames = read_osm_pbf(osm_pbf, boundary)
         if not any(osm_frames.values()):
             raise ValueError(
-                f"No matching healthcare, school, or park features were found inside "
+                f"No matching hospital, fire, police, or shelter features were found inside "
                 f"the Quetta boundary in {osm_pbf}. Existing output layers were not replaced."
             )
         for output_name, frames in osm_frames.items():
             for selected in frames:
-                if output_name == "parks":
-                    projected = selected.to_crs(AREA_CRS)
-                    selected["area_m2"] = projected.geometry.area.round(2).to_numpy()
-                    selected["area_ha"] = (selected["area_m2"] / 10_000).round(4)
-                    selected["area_acres"] = (selected["area_m2"] / 4_046.8564224).round(4)
                 output_frames[output_name].append(selected)
         found_any_osm_source = True
 
@@ -369,7 +314,7 @@ def prepare_facilities(paths, boundary, output_dir, osm_pbf=None):
     if not found_any_osm_source:
         logging.warning(
             "No OSM fclass attribute exists in the supplied data. "
-            "Hospitals, schools, and parks are empty until OSM data is added."
+            "Emergency facility layers are empty until OSM data is added."
         )
 
 
@@ -455,7 +400,6 @@ def main():
     boundary_output = args.output / "quetta_district.geojson"
     write_compact(boundary, boundary_output, 15)
 
-    prepare_population(paths, boundary, args.output / "population.geojson")
     if args.download_osm:
         with tempfile.TemporaryDirectory(prefix="quetta-osm-") as temporary_directory:
             pbf_path = Path(temporary_directory) / "pakistan-latest.osm.pbf"
