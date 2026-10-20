@@ -11,6 +11,7 @@ The data preparation script scans `C:\webgis-data` and `C:\webgis-lab` for distr
 - District name field: `adm2_name` in `districts_A.geojson`.
 - Population field: `pop_2023` in `C:\webgis-lab\data\districts.geojson` (Quetta: 2,595,492).
 - No OSM `fclass` facility layer or finer-scale population layer was supplied locally. The latest Geofabrik Pakistan OSM extract was downloaded and processed; it provides healthcare facilities, schools, and parks. The population polygon uses the district-level 2023 census total; no newer local population source or union-council/tehsil layer was found.
+- The dashboard's facility layers contain 26 hospitals and clinics, 28 schools, colleges, and universities, and 24 parks and gardens from the October 18, 2026 OpenStreetMap snapshot, clipped to the Quetta district boundary. Counts reflect mapped OSM features and may change as the map data is updated.
 
 GIS packages (`geopandas`, `shapely`, and `pyproj`) are already installed in the QGIS Python runtime. On Windows, run the script using the QGIS environment launcher:
 
