@@ -3,6 +3,7 @@
 
   const QUETTA = [30.141413, 67.077434];
   const MAX_QUAKE_DISTANCE_KM = 500;
+  const DATA_VERSION = "20261020";
   const DATA_FILES = {
     boundary: "data/quetta_district.geojson",
     population: "data/population.geojson",
@@ -94,7 +95,8 @@
   }
 
   async function loadJson(path) {
-    const response = await fetch(path);
+    const url = path.startsWith("data/") ? `${path}?v=${DATA_VERSION}` : path;
+    const response = await fetch(url);
     if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`);
     return response.json();
   }
