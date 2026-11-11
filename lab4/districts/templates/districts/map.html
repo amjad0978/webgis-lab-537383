@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Districts from PostGIS</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; color: #23373b; background: #f4f6f6; }
+    header { padding: 16px 24px 12px; }
+    h1 { margin: 0; font-size: 22px; }
+    .subtitle { margin: 4px 0 0; color: #5b6a6e; }
+    #map { height: calc(100vh - 90px); min-height: 400px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Districts from PostGIS</h1>
+    <p class="subtitle">
+      <span id="count">Loading districts...</span>, served by Django from the database.
+    </p>
+  </header>
+  <div id="map"></div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const DISTRICTS_URL = "{% url 'districts-geojson' %}";
+    const WHERE_URL = "{% url 'district-at' %}";
+    const map = L.map('map', {
+      maxBounds: [[21.5, 58.5], [39.0, 80.5]],
+      maxBoundsViscosity: 1.0,
+      minZoom: 5
+    }).setView([30.3753, 69.3451], 5);
+
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    const colours = {
+      'Punjab': '#1b9e77',
+      'Sindh': '#d95f02',
+      'Khyber Pakhtunkhwa': '#7570b3',
+      'Balochistan': '#e7298a',
+      'Islamabad': '#66a61e',
+      'Azad Kashmir': '#e6ab02',
+      'Gilgit Baltistan': '#a6761d'
+    };
+
+    function show(value) {
+      return value === null || value === undefined
+        ? 'not recorded'
+        : value.toLocaleString();
+    }
+
+    async function loadDistricts() {
+      const response = await fetch(DISTRICTS_URL);
+      if (!response.ok) {
+        throw new Error('District request failed with status ' + response.status);
+      }
+
+      const data = await response.json();
+      const layer = L.geoJSON(data, {
+        style: function (feature) {
+          return {
+            color: '#ffffff',
+            weight: 1,
+            fillColor: colours[feature.properties.province] || '#888888',
+            fillOpacity: 0.7
+          };
+        },
+        onEachFeature: function (feature, featureLayer) {
+          const properties = feature.properties;
+          featureLayer.bindTooltip(
+            properties.name + ', ' + properties.province,
+            { sticky: true }
+          );
+        }
+      }).addTo(map);
+
+      map.fitBounds(layer.getBounds());
+      document.getElementById('count').textContent =
+        data.features.length + ' districts';
+    }
+
+    loadDistricts().catch(function (error) {
+      console.error(error);
+      document.getElementById('count').textContent = 'Could not load districts';
+    });
+
+    map.on('click', async function (event) {
+      const url = WHERE_URL + '?lat=' + event.latlng.lat + '&lng=' + event.latlng.lng;
+      const response = await fetch(url);
+      if (!response.ok) {
+        console.error('Spatial query failed with status', response.status);
+        return;
+      }
+
+      const answer = await response.json();
+      const text = answer.district
+        ? '<strong>' + answer.district + '</strong>, ' + answer.province +
+          '<br>Population: ' + show(answer.pop_2023)
+        : 'Not inside any district';
+      L.popup().setLatLng(event.latlng).setContent(text).openOn(map);
+    });
+  </script>
+</body>
+</html>
