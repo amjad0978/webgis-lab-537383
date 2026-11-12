@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Facilities and districts</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0;
+         color: #23373b; background: #f4f6f6; }
+  header { padding: 14px 24px 10px; display: flex; flex-wrap: wrap;
+           align-items: center; gap: 8px 24px; }
+  h1 { margin: 0; font-size: 22px; }
+  .modes { display: flex; gap: 14px; font-size: 14px; }
+  #status { color: #5b6a6e; font-size: 14px; margin-left: auto; }
+  #map { height: calc(100vh - 60px); min-height: 400px; }
+  .add-form label { display: block; margin: 6px 0 2px; font-size: 12px; }
+  .add-form input, .add-form select { width: 180px; }
+  .add-form button { margin-top: 8px; }
+  .error { color: #b42318; font-size: 12px; margin-top: 6px; }
+  .leaflet-interactive:focus { outline: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Facilities</h1>
+  <div class="modes">
+    <label><input type="radio" name="mode" value="look" checked> Look</label>
+    <label><input type="radio" name="mode" value="add"> Add a facility</label>
+    <label><input type="radio" name="mode" value="near"> Find within 25 km</label>
+  </div>
+  <span id="status">loading...</span>
+</header>
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const DISTRICTS_URL = "{% url 'district-list' %}";
+const FACILITIES_URL = "{% url 'facility-list' %}";
+const CSRF_TOKEN = "{{ csrf_token }}";
+
+const map = L.map('map', {
+  maxBounds: [[21.5, 58.5], [39.0, 80.5]],
+  maxBoundsViscosity: 1.0,
+  minZoom: 5
+}).setView([33.6, 73.0], 9);
+
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19,
+  attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
+
+const status = document.getElementById('status');
+
+// ---------- Districts, loaded by view ----------
+const districtLayer = L.geoJSON(null, {
+  style: { color: '#0f766e', weight: 1, fillColor: '#99d5cc', fillOpacity: 0.25 },
+  onEachFeature: function (feature, layer) {
+    layer.bindTooltip(feature.properties.name, { sticky: true });
+  }
+}).addTo(map);
+
+let pending = null;
+
+async function loadDistrictsInView() {
+  if (pending) pending.abort();
+  pending = new AbortController();
+
+  const b = map.getBounds();
+  const bbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]
+    .map(n => n.toFixed(4)).join(',');
+
+  try {
+    const response = await fetch(DISTRICTS_URL + '?in_bbox=' + bbox,
+                                 { signal: pending.signal });
+    const text = await response.text();
+    const data = JSON.parse(text);
+    districtLayer.clearLayers();
+    districtLayer.addData(data);
+    status.textContent = data.features.length + ' districts in view, ' +
+                         Math.round(text.length / 1024) + ' KB';
+  } catch (err) {
+    if (err.name !== 'AbortError') console.error(err);
+  }
+}
+
+map.on('moveend', loadDistrictsInView);
+loadDistrictsInView();
+
+// ---------- Facilities ----------
+map.createPane('facilities');
+map.getPane('facilities').style.zIndex = 450;
+
+// Anything a user typed must be escaped before it goes into HTML
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+const colours = { school: '#2563eb', health: '#dc2626',
+                  water: '#0891b2', other: '#6b7280' };
+
+function facilityPopup(p) {
+      return '<strong>' + escapeHtml(p.name) + '</strong><br>' +
+         escapeHtml(p.kind) + ', in ' + escapeHtml(p.district || 'no district');
+}
+
+const facilityLayer = L.geoJSON(null, {
+  pointToLayer: function (feature, latlng) {
+    return L.circleMarker(latlng, {
+      pane: 'facilities',
+      bubblingMouseEvents: false,
+      radius: 7,
+      color: '#ffffff',
+      weight: 2,
+      fillColor: colours[feature.properties.kind] || colours.other,
+      fillOpacity: 0.95
+    });
+  },
+  onEachFeature: function (feature, layer) {
+    layer.bindPopup(facilityPopup(feature.properties));
+  }
+}).addTo(map);
+
+async function loadFacilities() {
+  const response = await fetch(FACILITIES_URL);
+  facilityLayer.addData(await response.json());
+}
+loadFacilities();
+
+// ---------- Add form ----------
+function addForm(latlng) {
+  const form = L.DomUtil.create('form', 'add-form');
+  form.innerHTML =
+    '<strong>New facility</strong>' +
+    '<label for="f-name">Name</label>' +
+    '<input id="f-name" name="name" required maxlength="100">' +
+    '<label for="f-kind">Kind</label>' +
+    '<select id="f-kind" name="kind">' +
+    '  <option value="school">School</option>' +
+    '  <option value="health">Health facility</option>' +
+    '  <option value="water">Water point</option>' +
+    '  <option value="other">Other</option>' +
+    '</select><br>' +
+    '<button type="submit">Save</button>' +
+    '<div class="error"></div>';
+
+  form.addEventListener('submit', async function (event) {
+    event.preventDefault();
+    const lng = Number(latlng.lng.toFixed(5));
+    const lat = Number(latlng.lat.toFixed(5));
+    const feature = {
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [lng, lat] },
+      properties: { name: form.elements.name.value,
+                    kind: form.elements.kind.value }
+    };
+
+    const response = await fetch(FACILITIES_URL, {
+      method: 'POST',
+                  headers: { 'Content-Type': 'application/json',
+                 'X-CSRFToken': CSRF_TOKEN },
+      body: JSON.stringify(feature)
+    });
+    const answer = await response.json();
+
+    if (response.status === 201) {
+      facilityLayer.addData(answer);
+      map.closePopup();
+      status.textContent = 'Saved ' + answer.properties.name +
+                           ', in ' + answer.properties.district;
+    } else {
+      form.querySelector('.error').textContent =
+        Object.values(answer).flat().join(' ');
+    }
+  });
+  return form;
+}
+
+// ---------- Find within 25 km ----------
+const nearLayer = L.layerGroup().addTo(map);
+
+async function findNear(latlng) {
+  nearLayer.clearLayers();
+  L.circle(latlng, { radius: 25000, color: '#7c3aed', weight: 2,
+                     fillOpacity: 0.05 }).addTo(nearLayer);
+
+  const url = FACILITIES_URL + '?dist=25000&point=' +
+              latlng.lng + ',' + latlng.lat;
+  const data = await (await fetch(url)).json();
+  const names = data.features.map(f => escapeHtml(f.properties.name));
+
+  L.popup().setLatLng(latlng).setContent(
+    '<strong>' + names.length + ' within 25 km</strong><br>' +
+    (names.join('<br>') || 'none')
+  ).openOn(map);
+}
+
+// ---------- Click handler ----------
+function currentMode() {
+  return document.querySelector('input[name="mode"]:checked').value;
+}
+
+map.on('click', function (e) {
+  if (currentMode() === 'add') {
+    L.popup().setLatLng(e.latlng).setContent(addForm(e.latlng)).openOn(map);
+  } else if (currentMode() === 'near') {
+    findNear(e.latlng);
+  }
+});
+</script>
+</body>
+</html>
